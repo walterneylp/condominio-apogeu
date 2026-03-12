@@ -50,4 +50,12 @@ npm run build
 
 ## Deploy no Coolify
 
-Configure no serviço as mesmas variáveis do `.env.example`. Se o token do Telegram não for informado, o app continua funcionando e apenas desabilita notificações/polling do bot.
+Este repositório agora possui `Dockerfile` na raiz para deploy direto pelo Coolify.
+
+Configure no serviço:
+
+- Build Pack: `Dockerfile`
+- Port: `80`
+- Variáveis do `.env.example`
+
+Se o token do Telegram não for informado, o app continua funcionando e apenas desabilita notificações/polling do bot.
