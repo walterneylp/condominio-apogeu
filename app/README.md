@@ -59,3 +59,13 @@ Configure no serviço:
 - Variáveis do `.env.example`
 
 Se o token do Telegram não for informado, o app continua funcionando e apenas desabilita notificações/polling do bot.
+
+## Supabase Edge Function
+
+Se você usar `supabase/functions/telegram-bot`, configure no ambiente da função:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `TELEGRAM_BOT_TOKEN`
+
+Sem essas variáveis a função agora responde erro `500` de configuração, mas não entra mais em loop de reinicialização.

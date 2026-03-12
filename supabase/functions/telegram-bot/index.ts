@@ -1,16 +1,31 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 
-const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") || "8698954274:AAGdTPd5IFHANsS9wNDr61aqG5kDwRXWFX8";
+const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
+const supabase =
+  SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+    : null;
 
 serve(async (req) => {
   try {
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      console.error("ERRO: Variáveis SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configuradas!");
+    if (!BOT_TOKEN) {
+      console.error("ERRO: TELEGRAM_BOT_TOKEN não configurado.");
+      return new Response(
+        JSON.stringify({ error: "TELEGRAM_BOT_TOKEN não configurado." }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!supabase) {
+      console.error("ERRO: SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configuradas.");
+      return new Response(
+        JSON.stringify({ error: "SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configuradas." }),
+        { status: 500, headers: { "Content-Type": "application/json" } },
+      );
     }
 
     const payload = await req.json();
@@ -115,7 +130,8 @@ serve(async (req) => {
 
   } catch (error) {
     console.error(error);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    const message = error instanceof Error ? error.message : "Erro interno";
+    return new Response(JSON.stringify({ error: message }), { status: 500 });
   }
 })
 
