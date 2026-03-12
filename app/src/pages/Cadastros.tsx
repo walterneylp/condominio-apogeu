@@ -46,6 +46,9 @@ export const Cadastros = () => {
   const [showNovoOperador, setShowNovoOperador] = useState(false);
   const [novoNomeOp, setNovoNomeOp] = useState('');
   const [novoTurnoOp, setNovoTurnoOp] = useState('Manhã');
+  const [novoPerfilOp, setNovoPerfilOp] = useState('porteiro');
+  const [novoLoginOp, setNovoLoginOp] = useState('');
+  const [novaSenhaOp, setNovaSenhaOp] = useState('');
 
   // New Terceiro Form State
   const [showNovoTerceiro, setShowNovoTerceiro] = useState(false);
@@ -190,26 +193,33 @@ export const Cadastros = () => {
     setLoadingNovo(true);
     setError(null);
     try {
+      if (!novoLoginOp || !novaSenhaOp) throw new Error('Login e Senha são obrigatórios');
+
       const { data, error: insertError } = await supabase.from('usuarios').insert([{
         condominio_id: '11111111-1111-1111-1111-111111111111',
         nome: novoNomeOp,
-        perfil: 'porteiro',
-        turno: novoTurnoOp
+        perfil: novoPerfilOp,
+        turno: novoTurnoOp,
+        login: novoLoginOp.trim().toLowerCase(),
+        senha: novaSenhaOp
       }]).select().single();
 
       if (insertError) throw insertError;
       
       logAuditoria('CREATE', 'usuarios', data.id, { 
         nome: novoNomeOp, 
-        perfil: 'porteiro', 
-        turno: novoTurnoOp 
+        perfil: novoPerfilOp, 
+        turno: novoTurnoOp,
+        login: novoLoginOp.trim().toLowerCase()
       });
       
       setNovoNomeOp('');
+      setNovoLoginOp('');
+      setNovaSenhaOp('');
       setShowNovoOperador(false);
       fetchData();
     } catch(err: any) {
-      setError(err.message || 'Erro ao criar operador');
+      setError(err.message || 'Erro ao criar operador. Verifique se o login já existe.');
     } finally {
       setLoadingNovo(false);
     }
@@ -590,15 +600,22 @@ export const Cadastros = () => {
               <div className="animate-fade-in">
                  {showNovoOperador && (
                   <form onSubmit={handleCreateOperador} style={{ marginBottom: '2rem', padding: '1.5rem', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)' }}>
-                    <h3 style={{ marginBottom: '1rem' }}>Cadastrar Novo Operador</h3>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                      <input type="text" className="input-base" placeholder="Nome do Porteiro/Operador" value={novoNomeOp} onChange={e => setNovoNomeOp(e.target.value)} required />
+                    <h3 style={{ marginBottom: '1rem' }}>Cadastrar Novo Operador/Funcionário</h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+                      <input type="text" className="input-base" placeholder="Nome Completo" value={novoNomeOp} onChange={e => setNovoNomeOp(e.target.value)} required />
+                      <select className="input-base" value={novoPerfilOp} onChange={e => setNovoPerfilOp(e.target.value)} required>
+                        <option value="porteiro">Porteiro</option>
+                        <option value="operador">Operador (Estoque/Triagem)</option>
+                        <option value="admin">Administrador Geral</option>
+                      </select>
                       <select className="input-base" style={{ appearance: 'none' }} value={novoTurnoOp} onChange={e => setNovoTurnoOp(e.target.value)} required>
                         <option value="Manhã">Manhã</option>
                         <option value="Tarde">Tarde</option>
                         <option value="Noite">Noite</option>
                         <option value="Madrugada">Madrugada</option>
                       </select>
+                      <input type="text" className="input-base" placeholder="Login de Acesso" value={novoLoginOp} onChange={e => setNovoLoginOp(e.target.value)} required />
+                      <input type="password" className="input-base" placeholder="Senha" value={novaSenhaOp} onChange={e => setNovaSenhaOp(e.target.value)} required />
                     </div>
                     <button type="submit" className="btn btn-primary" disabled={loadingNovo}>
                       {loadingNovo ? 'Salvando...' : 'Salvar Operador'}

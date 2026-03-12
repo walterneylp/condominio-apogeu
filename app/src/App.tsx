@@ -12,8 +12,9 @@ import { NotificationToast } from './components/NotificationToast';
 import { startTelegramPolling, stopTelegramPolling } from './lib/telegramPolling';
 
 // Layout Component
-const Layout = ({ onLogout }: { onLogout: () => void }) => { // Removed children prop, now uses Outlet
+const Layout = ({ onLogout, user }: { onLogout: () => void, user: any }) => {
   const location = useLocation();
+  const getInitials = (name: string) => name ? name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase() : 'U';
   
   const navItems = [
     { path: '/dashboard', label: 'Dashboard', icon: <Package size={20} /> }, // Changed path from '/' to '/dashboard'
@@ -98,11 +99,11 @@ const Layout = ({ onLogout }: { onLogout: () => void }) => { // Removed children
         <header style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: '2rem', padding: '1rem', background: 'var(--glass-light)', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
             <div style={{ textAlign: 'right' }}>
-              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Carlos Silva</div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Porteiro - Turno Manhã</div>
+              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{user?.nome || 'Usuário'}</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{user?.perfil} {user?.turno ? `- ${user?.turno}` : ''}</div>
             </div>
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-              CS
+              {getInitials(user?.nome)}
             </div>
           </div>
         </header>
@@ -127,24 +128,31 @@ const ProtectedRoute = ({ children, isAuthenticated }: { children: React.ReactNo
 // Main App Router
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState<any>(null);
 
   // Check for authentication on initial load
   React.useEffect(() => {
-    const storedAuth = localStorage.getItem('pdm_auth');
-    if (storedAuth === 'true') {
-      setIsAuthenticated(true);
-      startTelegramPolling();
+    const storedUser = localStorage.getItem('pdm_user');
+    if (storedUser) {
+      try {
+        const u = JSON.parse(storedUser);
+        setUser(u);
+        setIsAuthenticated(true);
+        startTelegramPolling();
+      } catch(e) {}
     }
   }, []);
 
-  const handleLogin = () => {
-    localStorage.setItem('pdm_auth', 'true');
+  const handleLogin = (userData: any) => {
+    localStorage.setItem('pdm_user', JSON.stringify(userData));
+    setUser(userData);
     setIsAuthenticated(true);
     startTelegramPolling();
   };
 
   const handleLogout = () => {
-    localStorage.removeItem('pdm_auth');
+    localStorage.removeItem('pdm_user');
+    setUser(null);
     setIsAuthenticated(false);
     stopTelegramPolling();
   };
@@ -157,7 +165,7 @@ function App() {
           path="/" 
           element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <Layout onLogout={handleLogout} />
+              <Layout onLogout={handleLogout} user={user} />
             </ProtectedRoute>
           }
         >

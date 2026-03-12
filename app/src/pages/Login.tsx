@@ -1,27 +1,40 @@
 import React, { useState } from 'react';
 import { Package, Lock, User, AlertCircle } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
-export const Login = ({ onLogin }: { onLogin: () => void }) => {
+export const Login = ({ onLogin }: { onLogin: (user: any) => void }) => {
   const [loading, setLoading] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     
-    // Simulate login validation
-    setTimeout(() => {
-      setLoading(false);
-      if (username === 'admin' && password === '123') {
-        onLogin();
-      } else {
-        setError('Usuário ou senha inválidos (use: admin / 123)');
+    try {
+      const { data, error: sbError } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('status', 'ativo')
+        .eq('login', username.trim().toLowerCase())
+        .eq('senha', password)
+        .single();
+
+      if (sbError || !data) {
+        setError('Usuário ou senha inválidos.');
+        return;
       }
-    }, 1000);
+
+      onLogin(data);
+    } catch (err: any) {
+      setError('Ocorreu um erro ao conectar com o servidor.');
+    } finally {
+      setLoading(false);
+    }
   };
+
 
   return (
     <div className="flex-center" style={{ minHeight: '100vh', width: '100%', padding: '2rem' }}>
