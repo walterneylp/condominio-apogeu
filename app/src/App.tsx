@@ -12,7 +12,15 @@ import { NotificationToast } from './components/NotificationToast';
 import { startTelegramPolling, stopTelegramPolling } from './lib/telegramPolling';
 
 // Layout Component
-const Layout = ({ onLogout, user }: { onLogout: () => void, user: any }) => {
+type SessionUser = {
+  id: string;
+  nome: string;
+  perfil: string;
+  turno?: string | null;
+  status?: string;
+};
+
+const Layout = ({ onLogout, user }: { onLogout: () => void, user: SessionUser | null }) => {
   const location = useLocation();
   const getInitials = (name: string) => name ? name.split(' ').map(n=>n[0]).slice(0,2).join('').toUpperCase() : 'U';
   
@@ -103,7 +111,7 @@ const Layout = ({ onLogout, user }: { onLogout: () => void, user: any }) => {
               <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{user?.perfil} {user?.turno ? `- ${user?.turno}` : ''}</div>
             </div>
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-primary), var(--accent-secondary))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-              {getInitials(user?.nome)}
+              {getInitials(user?.nome ?? 'Usuário')}
             </div>
           </div>
         </header>
@@ -128,7 +136,7 @@ const ProtectedRoute = ({ children, isAuthenticated }: { children: React.ReactNo
 // Main App Router
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<SessionUser | null>(null);
 
   // Check for authentication on initial load
   React.useEffect(() => {
@@ -139,12 +147,16 @@ function App() {
         setUser(u);
         setIsAuthenticated(true);
         startTelegramPolling();
-      } catch(e) {}
+      } catch {
+        localStorage.removeItem('pdm_user');
+        localStorage.removeItem('pdm_auth_user');
+      }
     }
   }, []);
 
-  const handleLogin = (userData: any) => {
+  const handleLogin = (userData: SessionUser) => {
     localStorage.setItem('pdm_user', JSON.stringify(userData));
+    localStorage.setItem('pdm_auth_user', userData.nome);
     setUser(userData);
     setIsAuthenticated(true);
     startTelegramPolling();
@@ -152,6 +164,7 @@ function App() {
 
   const handleLogout = () => {
     localStorage.removeItem('pdm_user');
+    localStorage.removeItem('pdm_auth_user');
     setUser(null);
     setIsAuthenticated(false);
     stopTelegramPolling();

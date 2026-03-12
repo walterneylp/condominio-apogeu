@@ -3,15 +3,27 @@
 // Esse worker deve ser iniciado uma vez quando o app carrega
 
 import { supabase } from './supabase';
+import { hasTelegramBotToken, runtimeConfig } from './runtimeConfig';
 
-const BOT_TOKEN = "8698954274:AAGdTPd5IFHANsS9wNDr61aqG5kDwRXWFX8";
-const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const TELEGRAM_API = hasTelegramBotToken
+  ? `https://api.telegram.org/bot${runtimeConfig.telegramBotToken}`
+  : null;
 
 let lastUpdateId = 0;
 let pollingActive = false;
 let pollingInterval: ReturnType<typeof setTimeout> | null = null;
 
+type TelegramUpdate = {
+  update_id: number;
+  message?: {
+    chat: { id: number };
+    text?: string;
+  };
+};
+
 async function sendTelegramMessage(chatId: number, text: string) {
+  if (!TELEGRAM_API) return;
+
   await fetch(`${TELEGRAM_API}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -19,7 +31,7 @@ async function sendTelegramMessage(chatId: number, text: string) {
   });
 }
 
-async function processUpdate(update: any) {
+async function processUpdate(update: TelegramUpdate) {
   const message = update.message;
   if (!message || !message.text) return;
 
@@ -96,6 +108,8 @@ async function processUpdate(update: any) {
 }
 
 async function pollUpdates() {
+  if (!TELEGRAM_API) return;
+
   try {
     const url = `${TELEGRAM_API}/getUpdates?offset=${lastUpdateId + 1}&timeout=30&limit=10`;
     const res = await fetch(url);
@@ -116,6 +130,10 @@ async function pollUpdates() {
 
 export function startTelegramPolling() {
   if (pollingActive) return;
+  if (!TELEGRAM_API) {
+    console.warn('[Telegram Polling] Desabilitado: defina VITE_TELEGRAM_BOT_TOKEN.');
+    return;
+  }
   pollingActive = true;
   console.log("[Telegram Polling] Iniciando polling de mensagens...");
 

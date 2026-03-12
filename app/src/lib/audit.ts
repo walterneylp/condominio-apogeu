@@ -7,15 +7,19 @@ export const logAuditoria = async (
   acao: LogAcao,
   entidade: LogEntidade,
   entidade_id: string,
-  detalhes: any = null
+  detalhes: unknown = null
 ) => {
   try {
+    const storedUser = localStorage.getItem('pdm_user');
+    const parsedUser = storedUser ? JSON.parse(storedUser) : null;
+    const criadoPor = parsedUser?.nome || localStorage.getItem('pdm_auth_user') || 'Sistema/Local';
+
     const { error } = await supabase.from('logs_auditoria').insert([{
       acao,
       entidade,
       entidade_id,
       detalhes,
-      criado_por: localStorage.getItem('pdm_auth_user') || 'Sistema/Local'
+      criado_por: criadoPor
     }]);
 
     if (error) {

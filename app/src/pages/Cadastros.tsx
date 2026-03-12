@@ -47,8 +47,6 @@ export const Cadastros = () => {
   const [novoNomeOp, setNovoNomeOp] = useState('');
   const [novoTurnoOp, setNovoTurnoOp] = useState('Manhã');
   const [novoPerfilOp, setNovoPerfilOp] = useState('porteiro');
-  const [novoLoginOp, setNovoLoginOp] = useState('');
-  const [novaSenhaOp, setNovaSenhaOp] = useState('');
 
   // New Terceiro Form State
   const [showNovoTerceiro, setShowNovoTerceiro] = useState(false);
@@ -193,15 +191,11 @@ export const Cadastros = () => {
     setLoadingNovo(true);
     setError(null);
     try {
-      if (!novoLoginOp || !novaSenhaOp) throw new Error('Login e Senha são obrigatórios');
-
       const { data, error: insertError } = await supabase.from('usuarios').insert([{
         condominio_id: '11111111-1111-1111-1111-111111111111',
         nome: novoNomeOp,
         perfil: novoPerfilOp,
-        turno: novoTurnoOp,
-        login: novoLoginOp.trim().toLowerCase(),
-        senha: novaSenhaOp
+        turno: novoTurnoOp
       }]).select().single();
 
       if (insertError) throw insertError;
@@ -209,17 +203,14 @@ export const Cadastros = () => {
       logAuditoria('CREATE', 'usuarios', data.id, { 
         nome: novoNomeOp, 
         perfil: novoPerfilOp, 
-        turno: novoTurnoOp,
-        login: novoLoginOp.trim().toLowerCase()
+        turno: novoTurnoOp
       });
       
       setNovoNomeOp('');
-      setNovoLoginOp('');
-      setNovaSenhaOp('');
       setShowNovoOperador(false);
       fetchData();
     } catch(err: any) {
-      setError(err.message || 'Erro ao criar operador. Verifique se o login já existe.');
+      setError(err.message || 'Erro ao criar operador.');
     } finally {
       setLoadingNovo(false);
     }
@@ -601,6 +592,9 @@ export const Cadastros = () => {
                  {showNovoOperador && (
                   <form onSubmit={handleCreateOperador} style={{ marginBottom: '2rem', padding: '1.5rem', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--glass-border)' }}>
                     <h3 style={{ marginBottom: '1rem' }}>Cadastrar Novo Operador/Funcionário</h3>
+                    <p style={{ marginBottom: '1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+                      O acesso administrativo é configurado por variáveis de ambiente. Este cadastro registra operadores no banco atual.
+                    </p>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
                       <input type="text" className="input-base" placeholder="Nome Completo" value={novoNomeOp} onChange={e => setNovoNomeOp(e.target.value)} required />
                       <select className="input-base" value={novoPerfilOp} onChange={e => setNovoPerfilOp(e.target.value)} required>
@@ -614,8 +608,6 @@ export const Cadastros = () => {
                         <option value="Noite">Noite</option>
                         <option value="Madrugada">Madrugada</option>
                       </select>
-                      <input type="text" className="input-base" placeholder="Login de Acesso" value={novoLoginOp} onChange={e => setNovoLoginOp(e.target.value)} required />
-                      <input type="password" className="input-base" placeholder="Senha" value={novaSenhaOp} onChange={e => setNovaSenhaOp(e.target.value)} required />
                     </div>
                     <button type="submit" className="btn btn-primary" disabled={loadingNovo}>
                       {loadingNovo ? 'Salvando...' : 'Salvar Operador'}

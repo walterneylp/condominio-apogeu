@@ -1,15 +1,23 @@
 // Serviço de integração com Telegram
-// Envia mensagens diretamente via Bot API do Telegram
-// O BOT_TOKEN aqui é conhecido pelo cliente - para produção, considere uso de proxy/servidor
+// Em apps puramente frontend o token ainda fica exposto ao cliente. Para produção,
+// prefira mover este envio para um backend/proxy.
 
-const BOT_TOKEN = "8698954274:AAGdTPd5IFHANsS9wNDr61aqG5kDwRXWFX8";
-const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+import { hasTelegramBotToken, runtimeConfig } from './runtimeConfig';
+
+const TELEGRAM_API = hasTelegramBotToken
+  ? `https://api.telegram.org/bot${runtimeConfig.telegramBotToken}`
+  : null;
 
 export const telegramService = {
   /**
    * Envia uma mensagem para um chat_id do Telegram
    */
   async sendMessage(chatId: string, text: string): Promise<boolean> {
+    if (!TELEGRAM_API) {
+      console.warn('Telegram desabilitado: defina VITE_TELEGRAM_BOT_TOKEN.');
+      return false;
+    }
+
     try {
       const response = await fetch(`${TELEGRAM_API}/sendMessage`, {
         method: "POST",
@@ -78,4 +86,3 @@ export const telegramService = {
     return notificados;
   },
 };
-

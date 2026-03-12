@@ -1,8 +1,26 @@
 import React, { useState } from 'react';
 import { Package, Lock, User, AlertCircle } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { runtimeConfig } from '../lib/runtimeConfig';
 
-export const Login = ({ onLogin }: { onLogin: (user: any) => void }) => {
+type AuthenticatedUser = {
+  id: string;
+  nome: string;
+  perfil: string;
+  turno: string | null;
+  status: string;
+  authSource: 'environment';
+};
+
+const buildAdminUser = (): AuthenticatedUser => ({
+  id: 'local-admin',
+  nome: runtimeConfig.adminDisplayName,
+  perfil: 'admin',
+  turno: null,
+  status: 'ativo',
+  authSource: 'environment',
+});
+
+export const Login = ({ onLogin }: { onLogin: (user: AuthenticatedUser) => void }) => {
   const [loading, setLoading] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -14,21 +32,19 @@ export const Login = ({ onLogin }: { onLogin: (user: any) => void }) => {
     setLoading(true);
     
     try {
-      const { data, error: sbError } = await supabase
-        .from('usuarios')
-        .select('*')
-        .eq('status', 'ativo')
-        .eq('login', username.trim().toLowerCase())
-        .eq('senha', password)
-        .single();
+      const normalizedUsername = username.trim().toLowerCase();
 
-      if (sbError || !data) {
-        setError('Usuário ou senha inválidos.');
+      if (
+        normalizedUsername === runtimeConfig.adminUsername &&
+        password === runtimeConfig.adminPassword
+      ) {
+        onLogin(buildAdminUser());
         return;
       }
 
-      onLogin(data);
-    } catch (err: any) {
+      setError('Credenciais inválidas.');
+    } catch (err: unknown) {
+      console.error('Connection Error:', err);
       setError('Ocorreu um erro ao conectar com o servidor.');
     } finally {
       setLoading(false);
@@ -50,6 +66,9 @@ export const Login = ({ onLogin }: { onLogin: (user: any) => void }) => {
           </div>
           <h1 className="text-gradient" style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>PDM</h1>
           <p style={{ color: 'var(--text-secondary)' }}>Portaria Delivery Manager</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '0.75rem' }}>
+            Use o usuário administrador configurado no ambiente.
+          </p>
         </div>
 
         {error && (
