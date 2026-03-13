@@ -9,6 +9,24 @@ const TELEGRAM_API = hasTelegramBotToken
   : null;
 
 export const telegramService = {
+  getUniqueTelegramTargets<T extends { nome: string; telegram_id?: string | null }>(moradores: T[]) {
+    const grouped = new Map<string, T[]>();
+
+    for (const morador of moradores) {
+      if (!morador.telegram_id) continue;
+
+      const current = grouped.get(morador.telegram_id) || [];
+      current.push(morador);
+      grouped.set(morador.telegram_id, current);
+    }
+
+    return Array.from(grouped.entries()).map(([chatId, items]) => ({
+      chatId,
+      moradores: items,
+      nomes: Array.from(new Set(items.map(item => item.nome))).join(', '),
+    }));
+  },
+
   /**
    * Envia uma mensagem para um chat_id do Telegram
    */
@@ -56,13 +74,13 @@ export const telegramService = {
     const notificados: string[] = [];
     const agora = new Date().toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
-    for (const m of moradores) {
-      if (!m.telegram_id) continue;
+    for (const target of this.getUniqueTelegramTargets(moradores)) {
+      const destinatarios = target.nomes;
 
       const linhas = [
         `📦 <b>Nova Encomenda na Portaria!</b>`,
         ``,
-        `Olá, <b>${m.nome}</b>! Sua encomenda chegou. 🏠`,
+        `Olá, <b>${destinatarios}</b>! Sua encomenda chegou. 🏠`,
         ``,
         `🕑 <b>Chegada:</b> ${agora}`,
         `📋 <b>Tipo:</b> ${dados.tipoEntrega}`,
@@ -77,9 +95,9 @@ export const telegramService = {
       linhas.push(`Dirija-se à portaria para retirar. ✅`);
 
       const message = linhas.join('\n');
-      const sent = await this.sendMessage(m.telegram_id, message);
+      const sent = await this.sendMessage(target.chatId, message);
       if (sent) {
-        notificados.push(m.nome);
+        notificados.push(destinatarios);
       }
     }
 
@@ -107,13 +125,13 @@ export const telegramService = {
       minute: '2-digit',
     });
 
-    for (const morador of moradores) {
-      if (!morador.telegram_id) continue;
+    for (const target of this.getUniqueTelegramTargets(moradores)) {
+      const destinatarios = target.nomes;
 
       const linhas = [
         `✅ <b>Encomenda Retirada</b>`,
         ``,
-        `Olá, <b>${morador.nome}</b>. Registramos uma retirada na portaria.`,
+        `Olá, <b>${destinatarios}</b>. Registramos uma retirada na portaria.`,
         ``,
         `📦 <b>Código:</b> ${dados.codigoEntrega}`,
         `📋 <b>Tipo:</b> ${dados.tipoEntrega}`,
@@ -125,9 +143,9 @@ export const telegramService = {
       if (dados.operadorNome) linhas.push(`👷 <b>Operador:</b> ${dados.operadorNome}`);
       linhas.push(`🕑 <b>Data/Hora:</b> ${dataHora}`);
 
-      const sent = await this.sendMessage(morador.telegram_id, linhas.join('\n'));
+      const sent = await this.sendMessage(target.chatId, linhas.join('\n'));
       if (sent) {
-        notificados.push(morador.nome);
+        notificados.push(destinatarios);
       }
     }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Building, Shield, UserPlus, FileText, Loader2, AlertCircle, Edit2, Trash2, Check, X, Search, ChevronLeft, ChevronRight, Clock } from 'lucide-react';
+import { Users, Building, Shield, UserPlus, FileText, Loader2, AlertCircle, Edit2, Trash2, Check, X, Search, ChevronLeft, ChevronRight, Clock, QrCode } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { logAuditoria } from '../lib/audit';
 
@@ -628,7 +628,7 @@ export const Cadastros = () => {
                                 onClick={() => handleRebindTelegram(m.id, editData.nome || m.nome)}
                                 title="Gerar novo QR de vínculo"
                               >
-                                <Shield size={16} />
+                                <QrCode size={16} />
                               </button>
                               <button className="btn btn-primary" style={{ padding: '0.25rem' }} onClick={() => handleSaveEdit('moradores')}><Check size={16} /></button>
                               <button className="btn btn-secondary" style={{ padding: '0.25rem' }} onClick={cancelEdit}><X size={16} /></button>
@@ -644,6 +644,7 @@ export const Cadastros = () => {
                             {m.telegram_id ? (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                                 <span style={{ color: 'var(--success)', fontWeight: 600 }}>Vinculado ({m.telegram_id})</span>
+                                <span style={{ fontSize: '0.8rem', color: 'var(--accent-primary)', fontWeight: 700 }}>PIN: {m.pin_vinculo_telegram || '---'}</span>
                                 <button
                                   className="btn"
                                   style={{ padding: 0, background: 'transparent', border: 'none', color: 'var(--accent-primary)', textAlign: 'left', fontSize: '0.8rem' }}
@@ -672,7 +673,7 @@ export const Cadastros = () => {
                                       onClick={() => handleOpenQrCode(m)}
                                       title="Ver QR Code de Vínculo"
                                     >
-                                      <Shield size={12} />
+                                      <QrCode size={12} />
                                     </button>
                                   </div>
                                 </div>

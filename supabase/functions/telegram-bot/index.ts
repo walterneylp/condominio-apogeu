@@ -10,6 +10,23 @@ const supabase =
     ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     : null;
 
+type MoradorLink = {
+  id: string;
+  nome: string;
+  unidade_id?: string | null;
+};
+
+type EntregaPendente = {
+  id: string;
+  codigo_entrega: string;
+  tipo_entrega: string;
+  status: string;
+  morador_id?: string | null;
+  unidade_id?: string | null;
+  unidades?: { numero?: string | null; bloco?: string | null } | null;
+  moradores?: { nome?: string | null } | null;
+};
+
 serve(async (req) => {
   try {
     if (!BOT_TOKEN) {
@@ -50,40 +67,34 @@ serve(async (req) => {
       }
 
       if (pin) {
-        const { data: morador, error } = await supabase
+        const { data: moradores, error } = await supabase
           .from('moradores')
-          .select('id, nome')
-          .eq('pin_vinculo_telegram', pin)
-          .single();
+          .select('id, nome, unidade_id')
+          .eq('pin_vinculo_telegram', pin);
 
-        if (error || !morador) {
+        if (error || !moradores || moradores.length === 0) {
           await sendMessage(chatId, "❌ Código PIN inválido. Verifique com a portaria.");
           return new Response("ok");
         }
 
         const chatIdText = chatId.toString();
-
-        const { error: cleanupError } = await supabase
-          .from('moradores')
-          .update({ telegram_id: null })
-          .eq('telegram_id', chatIdText)
-          .neq('id', morador.id);
-
-        if (cleanupError) {
-          console.warn('Falha ao limpar vínculos antigos de Telegram:', cleanupError);
-        }
+        const moradoresIds = moradores.map((morador: MoradorLink) => morador.id);
 
         const { error: updateError } = await supabase
           .from('moradores')
           .update({ 
             telegram_id: chatIdText
           })
-          .eq('id', morador.id);
+          .in('id', moradoresIds);
 
         if (updateError) {
           await sendMessage(chatId, "❌ Erro ao vincular sua conta. Tente novamente mais tarde.");
         } else {
-          await sendMessage(chatId, `✅ Sucesso! Olá ${morador.nome}, sua conta foi vinculada. Você receberá notificações por aqui sempre que uma encomenda chegar.`);
+          const nomes = moradores.map((morador: MoradorLink) => morador.nome).join(', ');
+          const successMessage = moradores.length === 1
+            ? `✅ Sucesso! Olá ${nomes}, sua conta foi vinculada. Você receberá notificações por aqui sempre que uma encomenda chegar.`
+            : `✅ Sucesso! Este Telegram foi vinculado aos seguintes cadastros: ${nomes}. Você receberá notificações de todos eles por aqui.`;
+          await sendMessage(chatId, successMessage);
         }
         return new Response("ok");
       }
@@ -96,27 +107,72 @@ serve(async (req) => {
 
       // 3. Handle Inquiry
       if (text.toLowerCase().includes("chegou") || text.toLowerCase().includes("encomenda") || text === "?") {
-        const { data: morador } = await supabase
+        const { data: moradores, error: moradoresError } = await supabase
           .from('moradores')
-          .select('id')
-          .eq('telegram_id', chatId.toString())
-          .maybeSingle();
+          .select('id, nome, unidade_id')
+          .eq('telegram_id', chatId.toString());
 
-        if (!morador) {
+        if (moradoresError || !moradores || moradores.length === 0) {
           await sendMessage(chatId, "⚠️ Sua conta não está vinculada. Envie seu código PIN para começar.");
           return new Response("ok");
         }
 
-        const { data: entregas } = await supabase
-          .from('entregas')
-          .select('codigo_entrega, tipo_entrega, status')
-          .eq('morador_id', morador.id)
-          .eq('status', 'recebido');
+        const moradoresIds = moradores.map((morador: MoradorLink) => morador.id);
+        const unidadesIds = Array.from(
+          new Set(
+            moradores
+              .map((morador: MoradorLink) => morador.unidade_id)
+              .filter(Boolean)
+          )
+        ) as string[];
 
-        if (!entregas || entregas.length === 0) {
+        const { data: entregasDiretas, error: entregasDiretasError } = await supabase
+          .from('entregas')
+          .select('id, codigo_entrega, tipo_entrega, status, morador_id, unidade_id, unidades(numero, bloco), moradores(nome)')
+          .in('morador_id', moradoresIds)
+          .in('status', ['recebido', 'aguardando retirada', 'notificado']);
+
+        if (entregasDiretasError) {
+          throw entregasDiretasError;
+        }
+
+        let entregasUnidade: EntregaPendente[] = [];
+
+        if (unidadesIds.length > 0) {
+          const { data: entregasUnidadeData, error: entregasUnidadeError } = await supabase
+            .from('entregas')
+            .select('id, codigo_entrega, tipo_entrega, status, morador_id, unidade_id, unidades(numero, bloco), moradores(nome)')
+            .in('unidade_id', unidadesIds)
+            .is('morador_id', null)
+            .in('status', ['recebido', 'aguardando retirada', 'notificado']);
+
+          if (entregasUnidadeError) {
+            throw entregasUnidadeError;
+          }
+
+          entregasUnidade = (entregasUnidadeData || []) as EntregaPendente[];
+        }
+
+        const entregasMap = new Map<string, EntregaPendente>();
+        for (const entrega of ([...(entregasDiretas || []), ...entregasUnidade] as EntregaPendente[])) {
+          entregasMap.set(entrega.id, entrega);
+        }
+
+        const entregas = Array.from(entregasMap.values());
+
+        if (entregas.length === 0) {
           await sendMessage(chatId, "📦 No momento não há encomendas pendentes para você.");
         } else {
-          const list = entregas.map(e => `• ${e.tipo_entrega} (${e.codigo_entrega})`).join("\n");
+          const list = entregas
+            .map((entrega) => {
+              const unidade = entrega.unidades?.numero
+                ? `${entrega.unidades.numero}${entrega.unidades?.bloco ? ` - Bloco ${entrega.unidades.bloco}` : ''}`
+                : '';
+              const destinatario = entrega.moradores?.nome ? ` para ${entrega.moradores.nome}` : '';
+              const unidadeInfo = unidade ? ` | Unidade ${unidade}` : '';
+              return `• ${entrega.tipo_entrega} (${entrega.codigo_entrega})${destinatario}${unidadeInfo}`;
+            })
+            .join("\n");
           await sendMessage(chatId, `📦 Você tem ${entregas.length} encomenda(s) aguardando retirada:\n\n${list}`);
         }
         return new Response("ok");
