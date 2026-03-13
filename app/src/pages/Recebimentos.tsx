@@ -6,6 +6,13 @@ import { SearchableSelect } from '../components/SearchableSelect';
 import { telegramService } from '../lib/telegram';
 
 type Unidade = { id: string, numero: string, bloco?: string };
+type MoradorNotificacao = {
+  id: string;
+  nome: string;
+  telegram_id?: string | null;
+  whatsapp?: string | null;
+  pin_vinculo_telegram?: string | null;
+};
 
 export const Recebimentos = () => {
   const [loading, setLoading] = useState(false);
@@ -125,6 +132,27 @@ export const Recebimentos = () => {
     }
   };
 
+  const fetchCurrentNotificationTargets = async (): Promise<MoradorNotificacao[]> => {
+    if (!unidadeId) return [];
+
+    let query = supabase
+      .from('moradores')
+      .select('id, nome, telegram_id, whatsapp, pin_vinculo_telegram')
+      .eq('status', 'ativo');
+
+    query = moradorId
+      ? query.eq('id', moradorId)
+      : query.eq('unidade_id', unidadeId);
+
+    const { data, error: moradoresError } = await query;
+
+    if (moradoresError) {
+      throw moradoresError;
+    }
+
+    return data || [];
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -163,9 +191,7 @@ export const Recebimentos = () => {
       }
       
       // Send Telegram notifications directly
-      const targets = moradorId 
-        ? moradoresUnidade.filter(m => m.id === moradorId)
-        : moradoresUnidade;
+      const targets = await fetchCurrentNotificationTargets();
 
       let notificationMsg = "Encomenda registrada.";
 
@@ -174,6 +200,8 @@ export const Recebimentos = () => {
       } else {
         const withTelegram = targets.filter(m => m.telegram_id);
         const withoutTelegram = targets.filter(m => !m.telegram_id);
+        const pendingTelegramLink = withoutTelegram.filter(m => m.pin_vinculo_telegram);
+        const withoutAnyTelegramPath = withoutTelegram.filter(m => !m.pin_vinculo_telegram);
 
         if (withTelegram.length > 0) {
           // Send real Telegram messages
@@ -196,9 +224,14 @@ export const Recebimentos = () => {
           }
         }
         
-        if (withoutTelegram.length > 0) {
-          const semTelegram = withoutTelegram.map(m => m.nome).join(', ');
-          notificationMsg += `${withTelegram.length > 0 ? ' | ' : ''}Sem Telegram: ${semTelegram} (use PIN em Cadastros)`;
+        if (pendingTelegramLink.length > 0) {
+          const pendentes = pendingTelegramLink.map(m => m.nome).join(', ');
+          notificationMsg += `${withTelegram.length > 0 ? ' | ' : ''}Vínculo pendente: ${pendentes} (aguardando uso do novo QR/PIN)`;
+        }
+
+        if (withoutAnyTelegramPath.length > 0) {
+          const semTelegram = withoutAnyTelegramPath.map(m => m.nome).join(', ');
+          notificationMsg += `${withTelegram.length > 0 || pendingTelegramLink.length > 0 ? ' | ' : ''}Sem Telegram: ${semTelegram} (gere um novo QR em Cadastros)`;
         }
       }
 
