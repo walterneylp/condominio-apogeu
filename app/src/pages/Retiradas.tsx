@@ -165,16 +165,15 @@ export const Retiradas = () => {
           .eq('status', 'ativo');
 
         if (moradoresNotif && moradoresNotif.length > 0) {
-          const msg =
-            `✅ <b>Encomenda Retirada com Sucesso!</b>\n\n` +
-            `📦 Nº da Encomenda: <b>${entregaSnapshot.codigo_entrega}</b>\n` +
-            `👤 Retirado por: <b>${nomeRetiradorSnapshot}</b> (${relacaoSnapshot})\n` +
-            `🕑 Data/Hora: <b>${agora}</b>\n` +
-            `👷 Operador responsável: <b>${operadorNome}</b>`;
-
-          for (const m of moradoresNotif) {
-            if (m.telegram_id) await telegramService.sendMessage(m.telegram_id, msg);
-          }
+          await telegramService.notifyPickup(moradoresNotif, {
+            codigoEntrega: entregaSnapshot.codigo_entrega,
+            tipoEntrega: entregaSnapshot.tipo_entrega,
+            retiradoPor: nomeRetiradorSnapshot,
+            relacaoMorador: relacaoSnapshot,
+            unidade: `${entregaSnapshot.unidades?.numero || ''}${entregaSnapshot.unidades?.bloco ? ` - Bloco ${entregaSnapshot.unidades.bloco}` : ''}`.trim(),
+            operadorNome,
+            dataHora: agora,
+          });
         }
       }
 
