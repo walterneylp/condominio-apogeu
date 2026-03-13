@@ -97,6 +97,44 @@ export const Cadastros = () => {
     setCurrentPage(1); // Reset page on tab change
   }, [activeTab]);
 
+  useEffect(() => {
+    if (activeTab !== 'moradores') return;
+
+    const channel = supabase
+      .channel('cadastros-moradores-sync')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'moradores' },
+        (payload: any) => {
+          const updatedMoradorId = payload.new?.id || payload.old?.id;
+
+          if (updatedMoradorId && editingId === updatedMoradorId) {
+            setEditData((current: any) => ({
+              ...current,
+              telegram_id: payload.new?.telegram_id ?? current.telegram_id ?? '',
+              pin_vinculo_telegram: payload.new?.pin_vinculo_telegram ?? current.pin_vinculo_telegram ?? null,
+            }));
+          }
+
+          if (
+            qrCodeData &&
+            payload.eventType === 'UPDATE' &&
+            payload.old?.pin_vinculo_telegram === qrCodeData.pin &&
+            payload.new?.telegram_id
+          ) {
+            setQrCodeData(null);
+          }
+
+          fetchData();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeTab, editingId, qrCodeData]);
+
   const fetchData = async () => {
     setLoading(true);
     setError(null);
