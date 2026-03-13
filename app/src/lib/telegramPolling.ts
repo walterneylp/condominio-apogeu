@@ -54,7 +54,7 @@ async function processUpdate(update: TelegramUpdate) {
       .maybeSingle();
 
     if (error || !morador) {
-      await sendTelegramMessage(chatId, "❌ Código PIN inválido ou já utilizado. Verifique com a portaria.");
+      await sendTelegramMessage(chatId, "❌ Código PIN inválido. Verifique com a portaria.");
       return;
     }
 
@@ -72,7 +72,7 @@ async function processUpdate(update: TelegramUpdate) {
 
     const { error: updateError } = await supabase
       .from("moradores")
-      .update({ telegram_id: chatIdText, pin_vinculo_telegram: null })
+      .update({ telegram_id: chatIdText })
       .eq("id", morador.id);
 
     if (updateError) {

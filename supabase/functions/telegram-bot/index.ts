@@ -57,7 +57,7 @@ serve(async (req) => {
           .single();
 
         if (error || !morador) {
-          await sendMessage(chatId, "❌ Código PIN inválido ou já utilizado. Verifique com a portaria.");
+          await sendMessage(chatId, "❌ Código PIN inválido. Verifique com a portaria.");
           return new Response("ok");
         }
 
@@ -76,8 +76,7 @@ serve(async (req) => {
         const { error: updateError } = await supabase
           .from('moradores')
           .update({ 
-            telegram_id: chatIdText,
-            pin_vinculo_telegram: null 
+            telegram_id: chatIdText
           })
           .eq('id', morador.id);
 
