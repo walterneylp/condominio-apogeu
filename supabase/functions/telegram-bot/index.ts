@@ -47,6 +47,17 @@ serve(async (req) => {
 
     const payload = await req.json();
     console.log("Payload recebido:", JSON.stringify(payload));
+
+    // Handle push notifications sent by the web app
+    if (payload.type === 'notification') {
+      const { chatId, message: text } = payload;
+      if (!chatId || !text) {
+        return new Response("ignored");
+      }
+
+      await sendMessage(parseInt(chatId, 10), text);
+      return new Response("sent");
+    }
     
     // Handle Webhook from Telegram
     if (payload.message) {
@@ -181,15 +192,6 @@ serve(async (req) => {
       // 4. Default Message
       await sendMessage(chatId, "🤖 Olá! No momento eu só entendo:\n• Seu código PIN de 6 dígitos\n• Perguntas como 'Chegou alguma coisa?'");
       return new Response("ok");
-    }
-
-    // --- II. Handle Push Notifications from Database Trigger ---
-    if (payload.type === 'notification') {
-      const { chatId, message: text } = payload;
-      if (chatId && text) {
-        await sendMessage(parseInt(chatId), text);
-        return new Response("sent");
-      }
     }
 
     return new Response("ignored");
