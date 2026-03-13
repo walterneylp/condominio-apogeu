@@ -61,10 +61,22 @@ serve(async (req) => {
           return new Response("ok");
         }
 
+        const chatIdText = chatId.toString();
+
+        const { error: cleanupError } = await supabase
+          .from('moradores')
+          .update({ telegram_id: null })
+          .eq('telegram_id', chatIdText)
+          .neq('id', morador.id);
+
+        if (cleanupError) {
+          console.warn('Falha ao limpar vínculos antigos de Telegram:', cleanupError);
+        }
+
         const { error: updateError } = await supabase
           .from('moradores')
           .update({ 
-            telegram_id: chatId.toString(),
+            telegram_id: chatIdText,
             pin_vinculo_telegram: null 
           })
           .eq('id', morador.id);

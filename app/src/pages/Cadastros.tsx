@@ -10,6 +10,15 @@ type Morador = { id: string, nome: string, unidade_id: string, telefone: string,
 type Unidade = { id: string, numero: string, bloco: string, tipo: string };
 type Terceiro = { id: string, nome: string, documento: string, tipo: string, status: string, unidade_id: string, unidades?: { numero: string, bloco: string } };
 
+const normalizeOptionalValue = (value: string | null | undefined) => {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+};
+
+const normalizeMoradorContact = (value: string | null | undefined) => {
+  return normalizeOptionalValue(value);
+};
+
 export const Cadastros = () => {
   const [activeTab, setActiveTab] = useState('moradores');
   
@@ -93,9 +102,16 @@ export const Cadastros = () => {
     setError(null);
     try {
       if (activeTab === 'moradores') {
-        const { data, error } = await supabase.from('moradores').select('*, unidades(numero, bloco)').order('created_at', { ascending: false });
-        if (error) throw error;
-        setMoradores(data || []);
+        const [{ data: moradoresData, error: moradoresError }, { data: unidadesData, error: unidadesError }] = await Promise.all([
+          supabase.from('moradores').select('*, unidades(numero, bloco)').order('created_at', { ascending: false }),
+          supabase.from('unidades').select('*').order('bloco').order('numero'),
+        ]);
+
+        if (moradoresError) throw moradoresError;
+        if (unidadesError) throw unidadesError;
+
+        setMoradores(moradoresData || []);
+        setUnidades(unidadesData || []);
       } else if (activeTab === 'unidades') {
         const { data, error } = await supabase.from('unidades').select('*').order('bloco').order('numero');
         if (error) throw error;
@@ -122,12 +138,24 @@ export const Cadastros = () => {
     setLoadingNovo(true);
     setError(null);
     try {
+      const nome = novoNome.trim();
+      const telefone = normalizeMoradorContact(novoTelefone);
+      const telegramId = normalizeOptionalValue(novoTelegram);
+
+      if (!nome) {
+        throw new Error('Informe o nome do morador.');
+      }
+
+      if (!novaUnidadeId) {
+        throw new Error('Selecione uma unidade para o morador.');
+      }
+
       const { data, error: insertError } = await supabase.from('moradores').insert([{
-        nome: novoNome,
-        telefone: novoTelefone || null,
-        whatsapp: novoTelefone || null, // Assuming the UI maps telefone to whatsapp for now
-        telegram_id: novoTelegram || null,
-        pin_vinculo_telegram: generateTelegramPin(),
+        nome,
+        telefone,
+        whatsapp: telefone,
+        telegram_id: telegramId,
+        pin_vinculo_telegram: telegramId ? null : generateTelegramPin(),
         unidade_id: novaUnidadeId,
         status: 'ativo'
       }]).select().single();
@@ -143,7 +171,7 @@ export const Cadastros = () => {
       
       const moradorUnidade = unidades.find(u => u.id === novaUnidadeId);
       logAuditoria('CREATE', 'moradores', data.id, { 
-        nome: novoNome, 
+        nome, 
         unidade_info: `${moradorUnidade?.numero} ${moradorUnidade?.bloco || ''}`.trim()
       });
       
@@ -281,6 +309,42 @@ export const Cadastros = () => {
     setLoading(true);
     setError(null);
     try {
+      if (table === 'moradores') {
+        const nome = editData.nome?.trim();
+        const telefone = normalizeMoradorContact(editData.whatsapp ?? editData.telefone);
+        const telegramId = normalizeOptionalValue(editData.telegram_id);
+
+        if (!nome) {
+          throw new Error('Informe o nome do morador.');
+        }
+
+        if (!editData.unidade_id) {
+          throw new Error('Selecione uma unidade para o morador.');
+        }
+
+        const moradorPayload = {
+          nome,
+          unidade_id: editData.unidade_id,
+          telefone,
+          whatsapp: telefone,
+          telegram_id: telegramId,
+          status: editData.status,
+        };
+
+        const { error: updateError } = await supabase
+          .from('moradores')
+          .update(moradorPayload)
+          .eq('id', editingId);
+
+        if (updateError) throw updateError;
+
+        logAuditoria('UPDATE', 'moradores', editingId, moradorPayload);
+        setEditingId(null);
+        setEditData({});
+        fetchData();
+        return;
+      }
+
       // Remove joined data before updating
       const payload = { ...editData };
       delete payload.unidades;
@@ -321,6 +385,39 @@ export const Cadastros = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleOpenQrCode = async (morador: Morador) => {
+    setError(null);
+
+    if (morador.telegram_id) {
+      setError('Este morador já possui Telegram vinculado.');
+      return;
+    }
+
+    let pin = morador.pin_vinculo_telegram;
+
+    if (!pin) {
+      setLoading(true);
+      pin = generateTelegramPin();
+      try {
+        const { error: pinError } = await supabase
+          .from('moradores')
+          .update({ pin_vinculo_telegram: pin })
+          .eq('id', morador.id);
+
+        if (pinError) throw pinError;
+
+        fetchData();
+      } catch (err: any) {
+        setError(err.message || 'Erro ao preparar QR Code de vínculo.');
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    setQrCodeData({ nome: morador.nome, pin });
   };
 
   const getActiveTabState = () => {
@@ -473,7 +570,7 @@ export const Cadastros = () => {
                         <tr key={m.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
                           <td style={{ padding: '1rem', fontWeight: 500 }}>{m.nome}</td>
                           <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{m.unidades?.numero} {m.unidades?.bloco ? `- Bloco ${m.unidades?.bloco}` : ''}</td>
-                          <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{m.telefone || '-'}</td>
+                          <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{m.whatsapp || m.telefone || '-'}</td>
                           <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>
                             {m.telegram_id ? (
                               <span style={{ color: 'var(--success)', fontWeight: 600 }}>Vinculado ({m.telegram_id})</span>
@@ -493,7 +590,7 @@ export const Cadastros = () => {
                                     <button 
                                       className="btn" 
                                       style={{ padding: '0.2rem', background: 'transparent', border: 'none', color: 'var(--accent-primary)' }} 
-                                      onClick={() => setQrCodeData({ nome: m.nome, pin: m.pin_vinculo_telegram || '' })}
+                                      onClick={() => handleOpenQrCode(m)}
                                       title="Ver QR Code de Vínculo"
                                     >
                                       <Shield size={12} />

@@ -58,9 +58,21 @@ async function processUpdate(update: TelegramUpdate) {
       return;
     }
 
+    const chatIdText = chatId.toString();
+
+    const { error: cleanupError } = await supabase
+      .from("moradores")
+      .update({ telegram_id: null })
+      .eq("telegram_id", chatIdText)
+      .neq("id", morador.id);
+
+    if (cleanupError) {
+      console.warn("[Telegram Polling] Não foi possível limpar vínculos antigos:", cleanupError);
+    }
+
     const { error: updateError } = await supabase
       .from("moradores")
-      .update({ telegram_id: chatId.toString(), pin_vinculo_telegram: null })
+      .update({ telegram_id: chatIdText, pin_vinculo_telegram: null })
       .eq("id", morador.id);
 
     if (updateError) {
