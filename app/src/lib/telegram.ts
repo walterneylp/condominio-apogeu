@@ -1,7 +1,7 @@
-// Serviço de integração com Telegram
-// Em apps puramente frontend o token ainda fica exposto ao cliente. Para produção,
-// prefira mover este envio para um backend/proxy.
+// Serviço de integração com Telegram.
+// Preferimos a Edge Function para não depender de token embutido no frontend.
 
+import { supabase } from './supabase';
 import { hasTelegramBotToken, runtimeConfig } from './runtimeConfig';
 
 const TELEGRAM_API = hasTelegramBotToken
@@ -31,8 +31,22 @@ export const telegramService = {
    * Envia uma mensagem para um chat_id do Telegram
    */
   async sendMessage(chatId: string, text: string): Promise<boolean> {
+    const { error: functionError } = await supabase.functions.invoke('telegram-bot', {
+      body: {
+        type: 'notification',
+        chatId,
+        message: text,
+      },
+    });
+
+    if (!functionError) {
+      return true;
+    }
+
+    console.warn('Falha ao enviar via Edge Function, tentando envio direto:', functionError.message);
+
     if (!TELEGRAM_API) {
-      console.warn('Telegram desabilitado: defina VITE_TELEGRAM_BOT_TOKEN.');
+      console.warn('Telegram desabilitado no frontend e Edge Function indisponível.');
       return false;
     }
 
