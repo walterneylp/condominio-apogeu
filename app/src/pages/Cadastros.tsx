@@ -387,6 +387,29 @@ export const Cadastros = () => {
     }
   };
 
+  const handleRebindTelegram = async (moradorId: string, nome: string) => {
+    setLoading(true);
+    setError(null);
+    const newPin = generateTelegramPin();
+
+    try {
+      const { error: updateError } = await supabase
+        .from('moradores')
+        .update({ telegram_id: null, pin_vinculo_telegram: newPin })
+        .eq('id', moradorId);
+
+      if (updateError) throw updateError;
+
+      logAuditoria('UPDATE', 'moradores', moradorId, { acao: 'Regenerou QR de vínculo Telegram' });
+      setQrCodeData({ nome, pin: newPin });
+      fetchData();
+    } catch (err: any) {
+      setError(err.message || 'Erro ao gerar novo QR de vínculo.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleOpenQrCode = async (morador: Morador) => {
     setError(null);
 
@@ -561,6 +584,14 @@ export const Cadastros = () => {
                           </td>
                           <td style={{ padding: '1rem', textAlign: 'right' }}>
                             <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+                              <button
+                                className="btn"
+                                style={{ padding: '0.25rem', background: 'transparent', border: '1px solid var(--glass-border)', color: 'var(--accent-primary)' }}
+                                onClick={() => handleRebindTelegram(m.id, editData.nome || m.nome)}
+                                title="Gerar novo QR de vínculo"
+                              >
+                                <Shield size={16} />
+                              </button>
                               <button className="btn btn-primary" style={{ padding: '0.25rem' }} onClick={() => handleSaveEdit('moradores')}><Check size={16} /></button>
                               <button className="btn btn-secondary" style={{ padding: '0.25rem' }} onClick={cancelEdit}><X size={16} /></button>
                             </div>
@@ -573,7 +604,17 @@ export const Cadastros = () => {
                           <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>{m.whatsapp || m.telefone || '-'}</td>
                           <td style={{ padding: '1rem', color: 'var(--text-secondary)' }}>
                             {m.telegram_id ? (
-                              <span style={{ color: 'var(--success)', fontWeight: 600 }}>Vinculado ({m.telegram_id})</span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                                <span style={{ color: 'var(--success)', fontWeight: 600 }}>Vinculado ({m.telegram_id})</span>
+                                <button
+                                  className="btn"
+                                  style={{ padding: 0, background: 'transparent', border: 'none', color: 'var(--accent-primary)', textAlign: 'left', fontSize: '0.8rem' }}
+                                  onClick={() => handleRebindTelegram(m.id, m.nome)}
+                                  title="Gerar novo QR de vínculo"
+                                >
+                                  Gerar novo QR
+                                </button>
+                              </div>
                             ) : (
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
                                 <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>Não vinculado</span>
