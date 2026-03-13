@@ -30,6 +30,13 @@ type Retirada = {
   usuarios?: { nome: string };
 };
 
+type MoradorNotificacao = {
+  id: string;
+  nome: string;
+  telegram_id?: string | null;
+  pin_vinculo_telegram?: string | null;
+};
+
 export const Retiradas = () => {
   // --- SEÇÃO SUPERIOR (Pendentes) ---
   const [searchTerm, setSearchTerm] = useState('');
@@ -110,6 +117,32 @@ export const Retiradas = () => {
     setRelacaoRetirador('Próprio morador');
   };
 
+  const fetchPickupNotificationTargets = async (entregaId: string): Promise<MoradorNotificacao[]> => {
+    const { data: entregaDetalhes, error: entregaError } = await supabase
+      .from('entregas')
+      .select('unidade_id, morador_id')
+      .eq('id', entregaId)
+      .single();
+
+    if (entregaError) throw entregaError;
+    if (!entregaDetalhes?.unidade_id) return [];
+
+    let query = supabase
+      .from('moradores')
+      .select('id, nome, telegram_id, pin_vinculo_telegram')
+      .eq('status', 'ativo');
+
+    query = entregaDetalhes.morador_id
+      ? query.eq('id', entregaDetalhes.morador_id)
+      : query.eq('unidade_id', entregaDetalhes.unidade_id);
+
+    const { data, error: moradoresError } = await query;
+
+    if (moradoresError) throw moradoresError;
+
+    return data || [];
+  };
+
   const handleConfirmarRetirada = async () => {
     if (!modalEntrega || !nomeRetirador.trim()) {
       setError('Informe o nome de quem está retirando.');
@@ -149,33 +182,44 @@ export const Retiradas = () => {
 
       if (retiradaError) console.warn('Erro ao criar retirada:', retiradaError);
 
-      // Buscar moradores da unidade com Telegram vinculdao para notificar
-      const { data: entregaDetalhes } = await supabase
-        .from('entregas')
-        .select('unidade_id')
-        .eq('id', entregaId)
-        .single();
+      const moradoresNotif = await fetchPickupNotificationTargets(entregaId);
+      const withTelegram = moradoresNotif.filter(m => m.telegram_id);
+      const pendingTelegramLink = moradoresNotif.filter(m => !m.telegram_id && m.pin_vinculo_telegram);
+      const withoutAnyTelegramPath = moradoresNotif.filter(m => !m.telegram_id && !m.pin_vinculo_telegram);
 
-      if (entregaDetalhes?.unidade_id) {
-        const { data: moradoresNotif } = await supabase
-          .from('moradores')
-          .select('nome, telegram_id')
-          .eq('unidade_id', entregaDetalhes.unidade_id)
-          .not('telegram_id', 'is', null)
-          .eq('status', 'ativo');
+      let notificationMsg = 'Retirada registrada com sucesso.';
 
-        if (moradoresNotif && moradoresNotif.length > 0) {
-          await telegramService.notifyPickup(moradoresNotif, {
-            codigoEntrega: entregaSnapshot.codigo_entrega,
-            tipoEntrega: entregaSnapshot.tipo_entrega,
-            retiradoPor: nomeRetiradorSnapshot,
-            relacaoMorador: relacaoSnapshot,
-            unidade: `${entregaSnapshot.unidades?.numero || ''}${entregaSnapshot.unidades?.bloco ? ` - Bloco ${entregaSnapshot.unidades.bloco}` : ''}`.trim(),
-            operadorNome,
-            dataHora: agora,
-          });
-        }
+      if (withTelegram.length > 0) {
+        const notificados = await telegramService.notifyPickup(withTelegram, {
+          codigoEntrega: entregaSnapshot.codigo_entrega,
+          tipoEntrega: entregaSnapshot.tipo_entrega,
+          retiradoPor: nomeRetiradorSnapshot,
+          relacaoMorador: relacaoSnapshot,
+          unidade: `${entregaSnapshot.unidades?.numero || ''}${entregaSnapshot.unidades?.bloco ? ` - Bloco ${entregaSnapshot.unidades.bloco}` : ''}`.trim(),
+          operadorNome,
+          dataHora: agora,
+        });
+
+        notificationMsg =
+          notificados.length > 0
+            ? `✅ Telegram de retirada enviado para: ${notificados.join(', ')}`
+            : '⚠️ Erro ao enviar Telegram. Verificar vinculação.';
       }
+
+      if (pendingTelegramLink.length > 0) {
+        const pendentes = pendingTelegramLink.map(m => m.nome).join(', ');
+        notificationMsg += `${withTelegram.length > 0 ? ' | ' : ''}Vínculo pendente: ${pendentes} (aguardando uso do novo QR/PIN)`;
+      }
+
+      if (withoutAnyTelegramPath.length > 0) {
+        const semTelegram = withoutAnyTelegramPath.map(m => m.nome).join(', ');
+        notificationMsg += `${withTelegram.length > 0 || pendingTelegramLink.length > 0 ? ' | ' : ''}Sem Telegram: ${semTelegram} (gere um novo QR em Cadastros)`;
+      }
+
+      const notificationEvent = new CustomEvent('pdm-notification', {
+        detail: { type: 'success', message: notificationMsg }
+      });
+      window.dispatchEvent(notificationEvent);
 
 
       logAuditoria('UPDATE', 'entregas', entregaId, { status: 'entregue', retirado_por: nomeRetiradorSnapshot });
